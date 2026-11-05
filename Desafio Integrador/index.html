@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desafío EDO: Ahorro Comunitario (Proyecto INF131)</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #2c3e50; }
+        .description { background-color: #e8f4f8; padding: 15px; border-left: 5px solid #3498db; margin-bottom: 20px; border-radius: 4px; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .input-group { display: flex; flex-direction: column; }
+        label { font-weight: bold; margin-bottom: 5px; font-size: 0.9em; }
+        input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #27ae60; color: white; border: none; padding: 10px 20px; font-size: 1em; cursor: pointer; border-radius: 4px; width: 100%; font-weight: bold; }
+        button:hover { background-color: #2ecc71; }
+        .chart-container { margin-top: 30px; position: relative; height: 400px; width: 100%; }
+        table { width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 0.85em; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #34495e; color: white; }
+        .interpretation { margin-top: 20px; padding: 15px; background-color: #fdfae6; border-left: 5px solid #f1c40f; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Desafío: Fondo de Ahorro Comunitario</h1>
+    
+    <div class="description">
+        <h3>Contexto del Problema</h3>
+        <p>Un grupo de vecinos desea establecer un fondo de emergencia para reparar el techo de su sede social. Realizan depósitos continuos mensuales en una cuenta que genera un pequeño interés compuesto de forma continua.</p>
+        <p><strong>Pregunta:</strong> ¿Cuánto tiempo tomará alcanzar la meta económica para iniciar las reparaciones y cuál es la evolución del capital?</p>
+        <p><strong>EDO utilizada:</strong> dA/dt = rA + D (donde A es el capital, r la tasa de interés, y D el depósito mensual).</p>
+    </div>
+
+    <div class="form-grid">
+        <div class="input-group">
+            <label>Condición inicial A(0) [Bs]:</label>
+            <input type="number" id="A0" value="1000" step="100" min="0">
+        </div>
+        <div class="input-group">
+            <label>Tasa de interés (r) [ej. 0.01 = 1% mensual]:</label>
+            <input type="number" id="r" value="0.005" step="0.001" min="0">
+        </div>
+        <div class="input-group">
+            <label>Depósito mensual (D) [Bs/mes]:</label>
+            <input type="number" id="D" value="500" step="50" min="0">
+        </div>
+        <div class="input-group">
+            <label>Tamaño de paso (h) [meses]:</label>
+            <input type="number" id="h" value="1" step="0.1" min="0.1">
+        </div>
+        <div class="input-group">
+            <label>Tiempo de simulación [meses]:</label>
+            <input type="number" id="t_max" value="24" step="1" min="1">
+        </div>
+    </div>
+    
+    <button onclick="ejecutarSimulacion()">Ejecutar Simulación Numérica</button>
+
+    <div class="chart-container">
+        <canvas id="graficaEDO"></canvas>
+    </div>
+
+    <div class="interpretation" id="interpretacionBox" style="display: none;">
+        <h3>Interpretación para la Comunidad</h3>
+        <p id="textoInterpretacion"></p>
+    </div>
+
+    <div style="overflow-x: auto;">
+        <table id="tablaResultados">
+            <thead>
+                <tr>
+                    <th>Tiempo t (meses)</th>
+                    <th>Sol. Analítica [Bs]</th>
+                    <th>Heun (RK2) [Bs]</th>
+                    <th>Error Rel. Heun (%)</th>
+                    <th>RK4 [Bs]</th>
+                    <th>Error Rel. RK4 (%)</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let myChart = null;
+
+    
+    function f(r, D, A) {
+        return r * A + D;
+    }
+
+    
+    function solucionAnalitica(A0, r, D, t) {
+        if (r === 0) return A0 + D * t;
+        return (A0 + D / r) * Math.exp(r * t) - (D / r);
+    }
+
+    function ejecutarSimulacion() {
+        
+        const A0 = parseFloat(document.getElementById('A0').value);
+        const r = parseFloat(document.getElementById('r').value);
+        const D = parseFloat(document.getElementById('D').value);
+        const h = parseFloat(document.getElementById('h').value);
+        const t_max = parseFloat(document.getElementById('t_max').value);
+
+        if (h <= 0 || t_max <= 0) {
+            alert("El tamaño de paso (h) y el tiempo deben ser mayores a 0.");
+            return;
+        }
+
+        let tiempos = [];
+        let datosAnaliticos = [];
+        let datosHeun = [];
+        let datosRK4 = [];
+        
+        let iteraciones = Math.ceil(t_max / h);
+        
+        let A_heun = A0;
+        let A_rk4 = A0;
+
+        let htmlTabla = "";
+
+        for (let i = 0; i <= iteraciones; i++) {
+            let t = i * h;
+            
+            
+            if (t > t_max) t = t_max;
+
+            
+            let A_exact = solucionAnalitica(A0, r, D, t);
+        
+            
+            let errHeun = Math.abs(A_exact - A_heun);
+            let errRelHeun = (A_exact !== 0) ? (errHeun / Math.abs(A_exact)) * 100 : 0;
+            
+            let errRK4 = Math.abs(A_exact - A_rk4);
+            let errRelRK4 = (A_exact !== 0) ? (errRK4 / Math.abs(A_exact)) * 100 : 0;
+
+            
+            tiempos.push(t.toFixed(1));
+            datosAnaliticos.push(A_exact);
+            datosHeun.push(A_heun);
+            datosRK4.push(A_rk4);
+
+            
+            htmlTabla += `<tr>
+                <td>${t.toFixed(2)}</td>
+                <td>${A_exact.toFixed(2)}</td>
+                <td>${A_heun.toFixed(2)}</td>
+                <td>${errRelHeun.toFixed(4)} %</td>
+                <td>${A_rk4.toFixed(2)}</td>
+                <td>${errRelRK4.toFixed(4)} %</td>
+            </tr>`;
+
+            let k1_h = f(r, D, A_heun);
+            let k2_h = f(r, D, A_heun + h * k1_h);
+            let next_A_heun = A_heun + (h / 2) * (k1_h + k2_h);
+
+            
+            let k1 = f(r, D, A_rk4);
+            let k2 = f(r, D, A_rk4 + (h / 2) * k1);
+            let k3 = f(r, D, A_rk4 + (h / 2) * k2);
+            let k4 = f(r, D, A_rk4 + h * k3);
+            let next_A_rk4 = A_rk4 + (h / 6) * (k1 + 2 * k2 + 2 * k3 + k4);
+
+            A_heun = next_A_heun;
+            A_rk4 = next_A_rk4;
+        }
+
+        document.querySelector("#tablaResultados tbody").innerHTML = htmlTabla;
+        actualizarGrafica(tiempos, datosAnaliticos, datosHeun, datosRK4);
+        
+        
+        let capitalFinal = datosAnaliticos[datosAnaliticos.length - 1];
+        document.getElementById("interpretacionBox").style.display = "block";
+        document.getElementById("textoInterpretacion").innerHTML = `
+            Al finalizar el periodo de <strong>${t_max} meses</strong>, el fondo comunitario habrá acumulado un total proyectado de <strong>${capitalFinal.toFixed(2)} Bs</strong>. 
+            <br><br>
+            <strong>Análisis Numérico:</strong> El modelo clásico de <strong>Runge-Kutta de orden 4 (RK4)</strong> demuestra ser mucho más preciso que el método de Heun, manteniendo un error relativo porcentual cercano a cero en todo el intervalo de simulación. Esto garantiza que la junta vecinal pueda confiar en las proyecciones de RK4 para planificar el inicio de la reparación del techo sin riesgo a desajustes matemáticos graves.
+        `;
+    }
+
+    function actualizarGrafica(etiquetas, dAnalitico, dHeun, dRK4) {
+        const ctx = document.getElementById('graficaEDO').getContext('2d');
+        
+        if (myChart) {
+            myChart.destroy();
+        }
+
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: etiquetas,
+                datasets: [
+                    {
+                        label: 'Solución Analítica (Exacta)',
+                        data: dAnalitico,
+                        borderColor: '#2980b9',
+                        backgroundColor: 'rgba(41, 128, 185, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: true
+                    },
+                    {
+                        label: 'Método de Heun (RK2)',
+                        data: dHeun,
+                        borderColor: '#e74c3c',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 3
+                    },
+                    {
+                        label: 'Runge-Kutta 4 (RK4)',
+                        data: dRK4,
+                        borderColor: '#27ae60',
+                        borderWidth: 2,
+                        borderDash: [2, 2],
+                        pointRadius: 4,
+                        pointStyle: 'rectRot'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: { display: true, text: 'Acumulación del Capital en el Tiempo', font: { size: 16 } },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Tiempo (Meses)' } },
+                    y: { title: { display: true, text: 'Capital Acumulado [Bs]' } }
+                }
+            }
+        });
+    }
+
+    
+    window.onload = ejecutarSimulacion;
+</script>
+
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Desafío EDO: Fondo de Ahorro Comunitario
 
-**Materia:** INF131 (Proyecto)
+**Materia:** COM-254 Metodos Numericos I
 **Estudiante:** Rodrigo Borras Anze
 
 ## Descripción del Modelo
